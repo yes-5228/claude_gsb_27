@@ -9,6 +9,7 @@ from app.core.constants import OPEN_ISSUE_STATUSES
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
 from app.models import Inspection, Issue, Restroom
 from app.schemas.restroom import RestroomCreate, RestroomDetail, RestroomOut, RestroomUpdate
+from app.services import status_linkage_service
 
 SORTABLE_FIELDS = {
     "code": Restroom.code,
@@ -92,7 +93,20 @@ def create_restroom(db: Session, payload: RestroomCreate) -> Restroom:
 
 def update_restroom(db: Session, restroom_id: int, payload: RestroomUpdate) -> Restroom:
     restroom = get_restroom(db, restroom_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    # 状态变更走联动逻辑：留痕、停用区间与整改期限顺延
+    new_status = data.pop("status", None)
+    if new_status is not None:
+        target = new_status.value if hasattr(new_status, "value") else new_status
+        if target != restroom.status:
+            status_linkage_service.change_restroom_status(
+                db,
+                restroom_id,
+                to_status=target,
+                reason="台账信息变更",
+            )
+            restroom = get_restroom(db, restroom_id)
+    for key, value in data.items():
         setattr(restroom, key, value.value if hasattr(value, "value") else value)
     db.commit()
     db.refresh(restroom)

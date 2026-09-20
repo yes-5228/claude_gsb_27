@@ -10,7 +10,13 @@ from app.api.deps import PaginationDep, build_meta
 from app.core.database import get_db
 from app.schemas.common import MessageOut, Page
 from app.schemas.restroom import RestroomCreate, RestroomDetail, RestroomOut, RestroomUpdate
-from app.services import restroom_service
+from app.schemas.status_linkage import (
+    StatusChangeResult,
+    RestroomStatusChange,
+    StatusEventOut,
+    SuspensionPeriodOut,
+)
+from app.services import restroom_service, status_linkage_service
 
 router = APIRouter(prefix="/restrooms", tags=["公厕台账"])
 
@@ -75,3 +81,46 @@ def delete_restroom(
 ) -> MessageOut:
     restroom_service.delete_restroom(db, restroom_id, force=force)
     return MessageOut(message="删除成功")
+
+
+@router.post(
+    "/{restroom_id}/status",
+    response_model=StatusChangeResult,
+    summary="变更开放状态（联动巡查与整改期限）",
+)
+def change_status(
+    restroom_id: int,
+    payload: RestroomStatusChange,
+    db: Annotated[Session, Depends(get_db)],
+) -> StatusChangeResult:
+    return status_linkage_service.change_restroom_status(
+        db,
+        restroom_id,
+        to_status=payload.to_status.value,
+        reason=payload.reason,
+        operator=payload.operator,
+    )
+
+
+@router.get(
+    "/{restroom_id}/status-events",
+    response_model=list[StatusEventOut],
+    summary="状态变更留痕",
+)
+def list_status_events(
+    restroom_id: int, db: Annotated[Session, Depends(get_db)]
+) -> list[StatusEventOut]:
+    events = status_linkage_service.list_status_events(db, restroom_id)
+    return [StatusEventOut.model_validate(event) for event in events]
+
+
+@router.get(
+    "/{restroom_id}/suspensions",
+    response_model=list[SuspensionPeriodOut],
+    summary="停用区间列表",
+)
+def list_suspensions(
+    restroom_id: int, db: Annotated[Session, Depends(get_db)]
+) -> list[SuspensionPeriodOut]:
+    periods = status_linkage_service.list_suspensions(db, restroom_id)
+    return [SuspensionPeriodOut.model_validate(period) for period in periods]

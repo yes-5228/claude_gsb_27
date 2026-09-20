@@ -14,6 +14,7 @@ import {
   RecentInspectionsPanel,
   RecentIssuesPanel,
 } from './DashboardPanels.jsx';
+import AssessmentPanel from './AssessmentPanel.jsx';
 
 const RANGE_OPTIONS = [7, 14, 30];
 
@@ -63,6 +64,13 @@ export default function DashboardPage() {
                 unit="条"
                 tone="info"
                 foot={`今日 ${overview.inspection_today} 条 · 近 7 日 ${overview.inspection_week} 条`}
+              />
+              <StatCard
+                label="本月漏巡"
+                value={overview.inspection_missed_this_month}
+                unit="次"
+                tone={overview.inspection_missed_this_month > 0 ? 'warning' : 'primary'}
+                foot="停用期间不计入应巡"
               />
               <StatCard
                 label="近 7 日均分"
@@ -130,6 +138,8 @@ export default function DashboardPage() {
               <RecentIssuesPanel items={data.recent_issues} />
               <RecentInspectionsPanel items={data.recent_inspections} />
             </div>
+
+            <AssessmentPanel />
           </>
         ) : null}
       </div>

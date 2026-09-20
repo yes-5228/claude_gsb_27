@@ -18,6 +18,7 @@ class OverviewStats(BaseModel):
     inspection_total: int = 0
     inspection_today: int = 0
     inspection_week: int = 0
+    inspection_missed_this_month: int = Field(default=0, description="本月漏巡次数（停用期间不计）")
     avg_score_week: float = 0.0
     issue_total: int = 0
     issue_open: int = 0

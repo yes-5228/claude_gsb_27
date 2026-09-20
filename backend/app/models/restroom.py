@@ -45,3 +45,16 @@ class Restroom(Base):
     issues: Mapped[list["Issue"]] = relationship(  # noqa: F821
         back_populates="restroom", cascade="all, delete-orphan"
     )
+    status_events: Mapped[list["RestroomStatusEvent"]] = relationship(  # noqa: F821
+        back_populates="restroom",
+        cascade="all, delete-orphan",
+        order_by="RestroomStatusEvent.created_at.desc()",
+    )
+    suspension_periods: Mapped[list["SuspensionPeriod"]] = relationship(  # noqa: F821
+        back_populates="restroom",
+        cascade="all, delete-orphan",
+        order_by="SuspensionPeriod.started_at.desc()",
+    )
+    assessments: Mapped[list["MonthlyAssessment"]] = relationship(  # noqa: F821
+        back_populates="restroom", cascade="all, delete-orphan"
+    )

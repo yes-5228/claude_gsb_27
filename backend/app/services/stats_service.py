@@ -22,7 +22,7 @@ from app.schemas.stats import (
     RestroomRankItem,
     TrendPoint,
 )
-from app.services import inspection_service, issue_service
+from app.services import inspection_service, issue_service, status_linkage_service
 
 
 def _count(db: Session, model, *conditions) -> int:
@@ -58,6 +58,9 @@ def overview(db: Session) -> OverviewStats:
         inspection_total=_count(db, Inspection),
         inspection_today=_count(db, Inspection, Inspection.inspect_time >= today_start),
         inspection_week=_count(db, Inspection, Inspection.inspect_time >= week_start),
+        inspection_missed_this_month=status_linkage_service.missed_inspection_count(
+            db, month_start, now
+        ),
         avg_score_week=round(
             float(
                 db.scalar(

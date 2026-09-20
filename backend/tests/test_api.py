@@ -23,14 +23,8 @@ def test_restroom_crud_and_delete_guard(client, restroom):
     assert detail["inspection_count"] == 0
     assert detail["open_issue_count"] == 0
 
-    updated = client.patch(
-        f"/api/v1/restrooms/{restroom['id']}", json={"status": "维修中", "manager": "新责任人"}
-    ).json()
-    assert updated["status"] == "维修中"
-    assert updated["manager"] == "新责任人"
-
-    # 存在关联数据时不允许直接删除
-    client.post(
+    # 正常开放状态下登记巡查记录
+    created = client.post(
         "/api/v1/inspections",
         json={
             "restroom_id": restroom["id"],
@@ -39,6 +33,28 @@ def test_restroom_crud_and_delete_guard(client, restroom):
             "items": full_items(9),
         },
     )
+    assert created.status_code == 201
+
+    updated = client.patch(
+        f"/api/v1/restrooms/{restroom['id']}", json={"status": "维修中", "manager": "新责任人"}
+    ).json()
+    assert updated["status"] == "维修中"
+    assert updated["manager"] == "新责任人"
+
+    # 转维修后不再生成新的巡查任务
+    blocked_inspection = client.post(
+        "/api/v1/inspections",
+        json={
+            "restroom_id": restroom["id"],
+            "inspector": "测试巡查员",
+            "shift": "早班",
+            "items": full_items(9),
+        },
+    )
+    assert blocked_inspection.status_code == 400
+    assert "停用" in blocked_inspection.json()["detail"]
+
+    # 存在关联数据时不允许直接删除
     blocked = client.delete(f"/api/v1/restrooms/{restroom['id']}")
     assert blocked.status_code == 409
 

@@ -13,17 +13,20 @@ import { useAsync } from '../../hooks/useAsync.js';
 import { useListQuery } from '../../hooks/useListQuery.js';
 import { formatDateTime } from '../../utils/format.js';
 import RestroomFormModal from './RestroomFormModal.jsx';
+import RestroomStatusModal from './RestroomStatusModal.jsx';
 
 const TABS = [
   { key: 'profile', label: '基础档案' },
   { key: 'inspections', label: '巡查记录' },
   { key: 'issues', label: '问题记录' },
+  { key: 'status', label: '状态记录' },
 ];
 
 export default function RestroomDetailPage() {
   const { restroomId } = useParams();
   const [tab, setTab] = useState('profile');
   const [showForm, setShowForm] = useState(false);
+  const [showStatus, setShowStatus] = useState(false);
 
   const { data: restroom, loading, error, reload } = useAsync(
     () => restroomApi.detail(restroomId),
@@ -39,6 +42,14 @@ export default function RestroomDetailPage() {
     {},
     5,
   );
+  const statusEvents = useAsync(
+    () => (tab === 'status' ? restroomApi.statusEvents(restroomId) : Promise.resolve(null)),
+    [restroomId, tab],
+  );
+  const suspensions = useAsync(
+    () => (tab === 'status' ? restroomApi.suspensions(restroomId) : Promise.resolve(null)),
+    [restroomId, tab],
+  );
 
   return (
     <>
@@ -50,6 +61,9 @@ export default function RestroomDetailPage() {
             <Link className="btn" to="/restrooms">
               返回列表
             </Link>
+            <button type="button" className="btn" onClick={() => setShowStatus(true)}>
+              变更状态
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>
               编辑档案
             </button>
@@ -188,6 +202,68 @@ export default function RestroomDetailPage() {
                 <Pagination meta={issues.meta} onPageChange={issues.setPage} />
               </section>
             ) : null}
+
+            {tab === 'status' ? (
+              <>
+                <section className="card">
+                  <div className="card-title">
+                    <h3>状态变更留痕</h3>
+                    <span className="hint">停用与恢复均记录</span>
+                  </div>
+                  <DataTable
+                    loading={statusEvents.loading}
+                    error={statusEvents.error}
+                    rows={statusEvents.data || []}
+                    emptyText="暂无状态变更记录"
+                    columns={[
+                      { key: 'created_at', title: '变更时间', render: (row) => formatDateTime(row.created_at) },
+                      { key: 'from_status', title: '原状态', render: (row) => <StatusTag status={row.from_status} /> },
+                      { key: 'to_status', title: '新状态', render: (row) => <StatusTag status={row.to_status} /> },
+                      { key: 'operator', title: '操作人', render: (row) => row.operator || '-' },
+                      { key: 'reason', title: '变更原因', wrap: true, render: (row) => row.reason || '-' },
+                    ]}
+                  />
+                </section>
+
+                <section className="card">
+                  <div className="card-title">
+                    <h3>停用区间</h3>
+                    <span className="hint">停用期间不计入漏巡</span>
+                  </div>
+                  <DataTable
+                    loading={suspensions.loading}
+                    error={suspensions.error}
+                    rows={suspensions.data || []}
+                    emptyText="暂无停用记录"
+                    columns={[
+                      { key: 'started_at', title: '停用开始', render: (row) => formatDateTime(row.started_at) },
+                      {
+                        key: 'ended_at',
+                        title: '恢复开放',
+                        render: (row) => (row.ended_at ? formatDateTime(row.ended_at) : '停用中'),
+                      },
+                      {
+                        key: 'extend_days',
+                        title: '期限顺延',
+                        render: (row) =>
+                          row.extend_days == null
+                            ? '不顺延'
+                            : row.extend_days === 0
+                              ? '按停用时长顺延'
+                              : `固定顺延 ${row.extend_days} 天`,
+                      },
+                      {
+                        key: 'extension_settled',
+                        title: '顺延结算',
+                        render: (row) =>
+                          row.extend_days == null ? '-' : row.extension_settled ? '已结算' : '待恢复结算',
+                      },
+                      { key: 'reason', title: '停用原因', wrap: true, render: (row) => row.reason || '-' },
+                    ]}
+                  />
+                </section>
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -197,6 +273,18 @@ export default function RestroomDetailPage() {
           restroom={restroom}
           onClose={() => setShowForm(false)}
           onSaved={reload}
+        />
+      ) : null}
+
+      {showStatus && restroom ? (
+        <RestroomStatusModal
+          restroom={restroom}
+          onClose={() => setShowStatus(false)}
+          onChanged={() => {
+            reload();
+            statusEvents.reload();
+            suspensions.reload();
+          }}
         />
       ) : null}
     </>

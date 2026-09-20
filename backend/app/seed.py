@@ -15,7 +15,7 @@ from app.core.constants import (
     RestroomStatus,
     Shift,
 )
-from app.models import Restroom
+from app.models import Restroom, SuspensionPeriod
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
@@ -126,13 +126,30 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
         for name, district, address, grade, status, manager, stalls, basins, accessible in RESTROOM_SPECS
     ]
 
+    # 初始即停用的公厕补一段未关闭的停用区间，让漏检统计与月度考核口径自洽
+    for room in restrooms:
+        if room.status != RestroomStatus.NORMAL:
+            db.add(
+                SuspensionPeriod(
+                    restroom_id=room.id,
+                    started_at=now - timedelta(days=14),
+                    ended_at=None,
+                    reason="设施检修" if room.status == RestroomStatus.MAINTENANCE else "周边施工",
+                    operator="值班长",
+                    extend_days=None,
+                    extension_settled=True,
+                )
+            )
+    db.commit()
+
     quality_by_restroom = {room.id: rng.uniform(7.4, 9.8) for room in restrooms}
     inspection_ids: list[tuple[int, int]] = []  # (restroom_id, inspection_id)
 
     for offset in range(13, -1, -1):
         day = now - timedelta(days=offset)
         for room in restrooms:
-            if room.status == RestroomStatus.CLOSED:
+            # 停用（维修中/暂停使用）的公厕不生成巡查任务
+            if room.status != RestroomStatus.NORMAL:
                 continue
             if rng.random() < 0.3:
                 continue

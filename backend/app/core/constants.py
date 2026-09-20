@@ -97,3 +97,24 @@ OPEN_ISSUE_STATUSES: list[str] = [
 
 # 单检查项低于该分数视为不合格项
 INSPECTION_ITEM_PROBLEM_THRESHOLD = 6
+
+# 处于停用（不开放）的公厕状态：维修中、暂停使用
+SUSPENDED_RESTROOM_STATUSES: list[str] = [
+    RestroomStatus.MAINTENANCE,
+    RestroomStatus.CLOSED,
+]
+
+# 公厕开放状态流转规则：当前状态 -> 允许流转到的状态
+RESTROOM_STATUS_TRANSITIONS: dict[str, list[str]] = {
+    RestroomStatus.NORMAL: [RestroomStatus.MAINTENANCE, RestroomStatus.CLOSED],
+    RestroomStatus.MAINTENANCE: [RestroomStatus.NORMAL, RestroomStatus.CLOSED],
+    RestroomStatus.CLOSED: [RestroomStatus.NORMAL, RestroomStatus.MAINTENANCE],
+}
+
+# 每座正常开放公厕每日应巡查次数，用于漏检与月度考核口径
+INSPECTIONS_DUE_PER_DAY = 2
+
+
+def is_suspended_status(status: str) -> bool:
+    """判断公厕状态是否处于停用（维修中/暂停使用）。"""
+    return status in SUSPENDED_RESTROOM_STATUSES
