@@ -25,6 +25,8 @@ export function GradeTag({ grade }) {
         ? 'tag-primary'
         : grade === '合格'
           ? 'tag-warning'
-          : 'tag-danger';
+          : grade === '无需考核'
+            ? 'tag-neutral'
+            : 'tag-danger';
   return <span className={`tag ${tone}`}>{grade || '未评级'}</span>;
 }

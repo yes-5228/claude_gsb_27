@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import OPEN_ISSUE_STATUSES
 from app.core.exceptions import ConflictError, DomainError, NotFoundError
-from app.models import Inspection, Issue, Restroom
+from app.models import Inspection, Issue, Restroom, RestroomStatusEvent
 from app.schemas.restroom import RestroomCreate, RestroomDetail, RestroomOut, RestroomUpdate
 
 SORTABLE_FIELDS = {
@@ -92,7 +92,12 @@ def create_restroom(db: Session, payload: RestroomCreate) -> Restroom:
 
 def update_restroom(db: Session, restroom_id: int, payload: RestroomUpdate) -> Restroom:
     restroom = get_restroom(db, restroom_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if "status" in changes:
+        raise DomainError(
+            "开放状态请通过「状态变更」接口调整，以便联动巡查任务与整改期限并留痕"
+        )
+    for key, value in changes.items():
         setattr(restroom, key, value.value if hasattr(value, "value") else value)
     db.commit()
     db.refresh(restroom)
@@ -138,6 +143,11 @@ def get_restroom_detail(db: Session, restroom_id: int) -> RestroomDetail:
     total_issue_count = db.scalar(
         select(func.count()).select_from(Issue).where(Issue.restroom_id == restroom_id)
     ) or 0
+    status_changed_at = db.scalar(
+        select(func.max(RestroomStatusEvent.created_at)).where(
+            RestroomStatusEvent.restroom_id == restroom_id
+        )
+    )
 
     base = RestroomOut.model_validate(restroom).model_dump()
     return RestroomDetail(
@@ -148,6 +158,7 @@ def get_restroom_detail(db: Session, restroom_id: int) -> RestroomDetail:
         avg_score=round(float(avg_score), 1) if avg_score is not None else None,
         open_issue_count=open_issue_count,
         total_issue_count=total_issue_count,
+        status_changed_at=status_changed_at,
     )
 
 

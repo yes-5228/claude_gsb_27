@@ -9,8 +9,16 @@ from sqlalchemy.orm import Session
 from app.api.deps import PaginationDep, build_meta
 from app.core.database import get_db
 from app.schemas.common import MessageOut, Page
-from app.schemas.restroom import RestroomCreate, RestroomDetail, RestroomOut, RestroomUpdate
-from app.services import restroom_service
+from app.schemas.restroom import (
+    RestroomCreate,
+    RestroomDetail,
+    RestroomOut,
+    RestroomStatusChange,
+    RestroomStatusChangeResult,
+    RestroomStatusEventOut,
+    RestroomUpdate,
+)
+from app.services import restroom_service, status_service
 
 router = APIRouter(prefix="/restrooms", tags=["公厕台账"])
 
@@ -65,6 +73,37 @@ def update_restroom(
     restroom_id: int, payload: RestroomUpdate, db: Annotated[Session, Depends(get_db)]
 ) -> RestroomOut:
     return RestroomOut.model_validate(restroom_service.update_restroom(db, restroom_id, payload))
+
+
+@router.post(
+    "/{restroom_id}/status",
+    response_model=RestroomStatusChangeResult,
+    summary="变更开放状态（联动巡查任务与整改期限）",
+)
+def change_status(
+    restroom_id: int,
+    payload: RestroomStatusChange,
+    db: Annotated[Session, Depends(get_db)],
+) -> RestroomStatusChangeResult:
+    restroom, event, summary = status_service.change_status(db, restroom_id, payload)
+    return RestroomStatusChangeResult(
+        restroom=RestroomOut.model_validate(restroom),
+        event=RestroomStatusEventOut.model_validate(event),
+        **summary,
+    )
+
+
+@router.get(
+    "/{restroom_id}/status-events",
+    response_model=list[RestroomStatusEventOut],
+    summary="状态变更流水",
+)
+def list_status_events(
+    restroom_id: int, db: Annotated[Session, Depends(get_db)]
+) -> list[RestroomStatusEventOut]:
+    restroom_service.get_restroom(db, restroom_id)
+    events = status_service.list_events(db, restroom_id)
+    return [RestroomStatusEventOut.model_validate(event) for event in events]
 
 
 @router.delete("/{restroom_id}", response_model=MessageOut, summary="删除公厕")

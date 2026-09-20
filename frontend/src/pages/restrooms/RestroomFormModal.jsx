@@ -108,8 +108,15 @@ export default function RestroomFormModal({ restroom, onClose, onSaved }) {
             ))}
           </select>
         </Field>
-        <Field label="开放状态">
-          <select value={form.status} onChange={setValue('status')}>
+        <Field
+          label="开放状态"
+          hint={restroom?.id ? '状态变更请在详情页通过「状态变更」操作，以联动巡查任务与整改期限' : undefined}
+        >
+          <select
+            value={form.status}
+            onChange={setValue('status')}
+            disabled={Boolean(restroom?.id)}
+          >
             {(dictionaries?.restroom_status || ['正常开放', '维修中', '暂停使用']).map((item) => (
               <option key={item}>{item}</option>
             ))}

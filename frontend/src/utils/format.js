@@ -43,6 +43,9 @@ export const STATUS_TONES = {
   已关闭: 'tag-neutral',
   正常: 'tag-success',
   发现问题: 'tag-danger',
+  待执行: 'tag-info',
+  已取消: 'tag-neutral',
+  漏检: 'tag-danger',
 };
 
 export const SEVERITY_TONES = {

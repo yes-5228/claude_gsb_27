@@ -100,15 +100,16 @@ export default function InspectionFormModal({ defaultRestroomId, onClose, onSave
     >
       {error ? <div className="alert alert-error">{error}</div> : null}
       <form id="inspection-form" onSubmit={submit} className="form-grid">
-        <Field label="被巡查公厕 *">
+        <Field label="被巡查公厕 *" hint="维修中/暂停使用的公厕不生成巡查任务">
           <select
             value={form.restroom_id}
             onChange={(event) => setForm((prev) => ({ ...prev, restroom_id: event.target.value }))}
           >
             <option value="">请选择公厕</option>
             {options.map((option) => (
-              <option key={option.id} value={option.id}>
+              <option key={option.id} value={option.id} disabled={option.status !== '正常开放'}>
                 {option.code} {option.name}（{option.district}）
+                {option.status !== '正常开放' ? ` - ${option.status}` : ''}
               </option>
             ))}
           </select>

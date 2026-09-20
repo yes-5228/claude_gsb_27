@@ -10,6 +10,8 @@ from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
     INSPECTION_ITEM_MAX_SCORE,
     ISSUE_TRANSITIONS,
+    TASK_DISPLAY_MISSED,
+    InspectionTaskStatus,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
@@ -28,6 +30,7 @@ class RestroomOption(BaseModel):
     code: str
     name: str
     district: str
+    status: str
 
 
 class Dictionaries(BaseModel):
@@ -40,6 +43,7 @@ class Dictionaries(BaseModel):
     inspection_check_items: list[str]
     inspection_item_max_score: int
     issue_transitions: dict[str, list[str]]
+    inspection_task_status: list[str]
 
 
 @router.get("/dictionaries", response_model=Dictionaries, summary="枚举字典")
@@ -54,6 +58,7 @@ def get_dictionaries() -> Dictionaries:
         inspection_check_items=list(INSPECTION_CHECK_ITEMS),
         inspection_item_max_score=INSPECTION_ITEM_MAX_SCORE,
         issue_transitions={key: list(value) for key, value in ISSUE_TRANSITIONS.items()},
+        inspection_task_status=[item.value for item in InspectionTaskStatus] + [TASK_DISPLAY_MISSED],
     )
 
 
@@ -63,6 +68,8 @@ def get_restroom_options(
 ) -> list[RestroomOption]:
     rows = inspection_service.restroom_options(db, keyword=keyword)
     return [
-        RestroomOption(id=row.id, code=row.code, name=row.name, district=row.district)
+        RestroomOption(
+            id=row.id, code=row.code, name=row.name, district=row.district, status=row.status
+        )
         for row in rows
     ]

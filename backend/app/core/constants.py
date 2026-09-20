@@ -9,6 +9,24 @@ class RestroomStatus(StrEnum):
     CLOSED = "暂停使用"
 
 
+# 开放状态 = 正常开放；其余视为停用（维修中/暂停使用）
+OPEN_RESTROOM_STATUS = RestroomStatus.NORMAL.value
+SUSPENDED_RESTROOM_STATUSES: list[str] = [
+    RestroomStatus.MAINTENANCE.value,
+    RestroomStatus.CLOSED.value,
+]
+
+
+class InspectionTaskStatus(StrEnum):
+    PENDING = "待执行"
+    DONE = "已完成"
+    CANCELLED = "已取消"
+
+
+# 仅用于展示：过去日期仍未执行的任务在列表中显示为「漏检」，不落库
+TASK_DISPLAY_MISSED = "漏检"
+
+
 class RestroomGrade(StrEnum):
     FIRST = "一类"
     SECOND = "二类"
@@ -97,3 +115,9 @@ OPEN_ISSUE_STATUSES: list[str] = [
 
 # 单检查项低于该分数视为不合格项
 INSPECTION_ITEM_PROBLEM_THRESHOLD = 6
+
+# 月度考核：每漏检 1 天在巡查均分基础上扣减的分数
+ASSESSMENT_MISSED_PENALTY = 2.0
+
+# 月度考核结果：全月停用、无需考核时的标记
+ASSESSMENT_RESULT_NONE = "无需考核"

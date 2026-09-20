@@ -15,9 +15,11 @@ class OverviewStats(BaseModel):
     restroom_total: int = 0
     restroom_open: int = 0
     restroom_maintenance: int = 0
+    restroom_closed: int = 0
     inspection_total: int = 0
     inspection_today: int = 0
     inspection_week: int = 0
+    inspection_missed_week: int = Field(default=0, description="近 7 日漏检次数（停用期间不计）")
     avg_score_week: float = 0.0
     issue_total: int = 0
     issue_open: int = 0
@@ -30,6 +32,7 @@ class TrendPoint(BaseModel):
     date: str
     inspections: int = 0
     issues: int = 0
+    missed: int = 0
     avg_score: float = 0.0
 
 

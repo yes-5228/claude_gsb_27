@@ -23,11 +23,26 @@ def test_restroom_crud_and_delete_guard(client, restroom):
     assert detail["inspection_count"] == 0
     assert detail["open_issue_count"] == 0
 
-    updated = client.patch(
-        f"/api/v1/restrooms/{restroom['id']}", json={"status": "维修中", "manager": "新责任人"}
-    ).json()
-    assert updated["status"] == "维修中"
+    # 普通编辑不再允许直接改开放状态，需走状态变更接口
+    rejected = client.patch(f"/api/v1/restrooms/{restroom['id']}", json={"status": "维修中"})
+    assert rejected.status_code == 400
+
+    updated = client.patch(f"/api/v1/restrooms/{restroom['id']}", json={"manager": "新责任人"}).json()
     assert updated["manager"] == "新责任人"
+
+    changed = client.post(
+        f"/api/v1/restrooms/{restroom['id']}/status",
+        json={"to_status": "维修中", "reason": "管道检修", "operator": "值班长"},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["restroom"]["status"] == "维修中"
+
+    # 恢复开放后再产生巡查记录
+    restored = client.post(
+        f"/api/v1/restrooms/{restroom['id']}/status",
+        json={"to_status": "正常开放", "reason": "检修完成", "operator": "值班长"},
+    )
+    assert restored.status_code == 200
 
     # 存在关联数据时不允许直接删除
     client.post(

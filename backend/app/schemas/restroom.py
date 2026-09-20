@@ -77,3 +77,37 @@ class RestroomDetail(RestroomOut):
     avg_score: float | None = None
     open_issue_count: int = 0
     total_issue_count: int = 0
+    status_changed_at: datetime | None = Field(default=None, description="最近一次状态变更时间")
+
+
+class RestroomStatusChange(BaseModel):
+    """一次开放状态变更操作，会联动巡查任务与整改期限。"""
+
+    to_status: RestroomStatus = Field(description="目标状态")
+    reason: str = Field(min_length=1, max_length=500, description="变更原因")
+    operator: str = Field(min_length=1, max_length=60, description="操作人")
+
+
+class RestroomStatusEventOut(BaseModel):
+    """状态变更流水节点。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    restroom_id: int
+    from_status: str
+    to_status: str
+    reason: str
+    operator: str
+    created_at: datetime
+
+
+class RestroomStatusChangeResult(BaseModel):
+    """状态变更的联动结果汇总。"""
+
+    restroom: RestroomOut
+    event: RestroomStatusEventOut
+    cancelled_tasks: int = Field(default=0, description="本次取消的待执行任务数")
+    revived_tasks: int = Field(default=0, description="本次恢复的待执行任务数")
+    extended_issues: int = Field(default=0, description="本次顺延期限的未闭环问题数")
+    applied_rule: str | None = Field(default=None, description="命中的顺延规则名称")

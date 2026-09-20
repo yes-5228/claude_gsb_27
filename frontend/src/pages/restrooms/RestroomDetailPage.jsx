@@ -9,26 +9,33 @@ import DetailList from '../../components/DetailList.jsx';
 import PageHeader from '../../components/PageHeader.jsx';
 import Pagination from '../../components/Pagination.jsx';
 import { ScorePill, SeverityTag, StatusTag } from '../../components/Tags.jsx';
+import Timeline from '../../components/Timeline.jsx';
+import { useToast } from '../../components/Toast.jsx';
 import { useAsync } from '../../hooks/useAsync.js';
 import { useListQuery } from '../../hooks/useListQuery.js';
 import { formatDateTime } from '../../utils/format.js';
 import RestroomFormModal from './RestroomFormModal.jsx';
+import RestroomStatusModal from './RestroomStatusModal.jsx';
 
 const TABS = [
   { key: 'profile', label: '基础档案' },
   { key: 'inspections', label: '巡查记录' },
   { key: 'issues', label: '问题记录' },
+  { key: 'status', label: '状态记录' },
 ];
 
 export default function RestroomDetailPage() {
   const { restroomId } = useParams();
+  const toast = useToast();
   const [tab, setTab] = useState('profile');
   const [showForm, setShowForm] = useState(false);
+  const [showStatus, setShowStatus] = useState(false);
 
   const { data: restroom, loading, error, reload } = useAsync(
     () => restroomApi.detail(restroomId),
     [restroomId],
   );
+  const statusEvents = useAsync(() => restroomApi.statusEvents(restroomId), [restroomId]);
   const inspections = useListQuery(
     (params) => inspectionApi.list({ ...params, restroom_id: restroomId }),
     {},
@@ -40,6 +47,19 @@ export default function RestroomDetailPage() {
     5,
   );
 
+  const onStatusChanged = (result) => {
+    const parts = [];
+    if (result.cancelled_tasks) parts.push(`取消待执行任务 ${result.cancelled_tasks} 条`);
+    if (result.revived_tasks) parts.push(`恢复待执行任务 ${result.revived_tasks} 条`);
+    if (result.extended_issues)
+      parts.push(`按规则「${result.applied_rule}」顺延 ${result.extended_issues} 条问题期限`);
+    toast.success(
+      parts.length ? `状态已变更：${parts.join('；')}` : '状态已变更，无待联动事项',
+    );
+    reload();
+    statusEvents.reload();
+  };
+
   return (
     <>
       <PageHeader
@@ -50,6 +70,9 @@ export default function RestroomDetailPage() {
             <Link className="btn" to="/restrooms">
               返回列表
             </Link>
+            <button type="button" className="btn" onClick={() => setShowStatus(true)}>
+              状态变更
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>
               编辑档案
             </button>
@@ -119,6 +142,12 @@ export default function RestroomDetailPage() {
                     { label: '详细地址', value: restroom.address },
                     { label: '公厕等级', value: restroom.grade },
                     { label: '开放状态', value: <StatusTag status={restroom.status} /> },
+                    {
+                      label: '最近状态变更',
+                      value: restroom.status_changed_at
+                        ? formatDateTime(restroom.status_changed_at)
+                        : '无变更记录',
+                    },
                     { label: '开放时间', value: restroom.open_hours },
                     { label: '保洁责任人', value: restroom.manager },
                     { label: '联系电话', value: restroom.manager_phone },
@@ -155,6 +184,31 @@ export default function RestroomDetailPage() {
                   ]}
                 />
                 <Pagination meta={inspections.meta} onPageChange={inspections.setPage} />
+              </section>
+            ) : null}
+
+            {tab === 'status' ? (
+              <section className="card">
+                <div className="card-title">
+                  <h3>状态变更记录</h3>
+                  <span className="hint">停用与恢复全程留痕</span>
+                </div>
+                {statusEvents.loading ? <div className="loading-block">加载中…</div> : null}
+                {statusEvents.error ? (
+                  <div className="alert alert-error">{statusEvents.error.message}</div>
+                ) : null}
+                {statusEvents.data ? (
+                  <Timeline
+                    records={statusEvents.data.map((event) => ({
+                      id: event.id,
+                      action: `由「${event.from_status}」变更为「${event.to_status}」`,
+                      to_status: event.to_status,
+                      operator: event.operator,
+                      remark: event.reason,
+                      created_at: event.created_at,
+                    }))}
+                  />
+                ) : null}
               </section>
             ) : null}
 
@@ -197,6 +251,14 @@ export default function RestroomDetailPage() {
           restroom={restroom}
           onClose={() => setShowForm(false)}
           onSaved={reload}
+        />
+      ) : null}
+
+      {showStatus && restroom ? (
+        <RestroomStatusModal
+          restroom={restroom}
+          onClose={() => setShowStatus(false)}
+          onChanged={onStatusChanged}
         />
       ) : null}
     </>

@@ -22,7 +22,7 @@ from app.schemas.stats import (
     RestroomRankItem,
     TrendPoint,
 )
-from app.services import inspection_service, issue_service
+from app.services import inspection_service, issue_service, status_service
 
 
 def _count(db: Session, model, *conditions) -> int:
@@ -55,9 +55,13 @@ def overview(db: Session) -> OverviewStats:
         restroom_total=_count(db, Restroom),
         restroom_open=_count(db, Restroom, Restroom.status == RestroomStatus.NORMAL.value),
         restroom_maintenance=_count(db, Restroom, Restroom.status == RestroomStatus.MAINTENANCE.value),
+        restroom_closed=_count(db, Restroom, Restroom.status == RestroomStatus.CLOSED.value),
         inspection_total=_count(db, Inspection),
         inspection_today=_count(db, Inspection, Inspection.inspect_time >= today_start),
         inspection_week=_count(db, Inspection, Inspection.inspect_time >= week_start),
+        inspection_missed_week=status_service.missed_count(
+            db, week_start.date(), now.date()
+        ),
         avg_score_week=round(
             float(
                 db.scalar(
@@ -128,11 +132,12 @@ def inspection_trend(db: Session, days: int = 14) -> list[TrendPoint]:
     issue_rows = db.execute(
         select(Issue.report_time).where(Issue.report_time >= start_dt)
     ).all()
+    missed_map = status_service.missed_by_day(db, start, today)
 
     buckets: dict[str, dict[str, float]] = {}
     for offset in range(days):
         key = (start + timedelta(days=offset)).isoformat()
-        buckets[key] = {"inspections": 0, "issues": 0, "score_sum": 0.0}
+        buckets[key] = {"inspections": 0, "issues": 0, "score_sum": 0.0, "missed": 0}
     for inspect_time, score in inspection_rows:
         key = inspect_time.date().isoformat()
         if key in buckets:
@@ -142,6 +147,10 @@ def inspection_trend(db: Session, days: int = 14) -> list[TrendPoint]:
         key = report_time.date().isoformat()
         if key in buckets:
             buckets[key]["issues"] += 1
+    for day, count in missed_map.items():
+        key = day.isoformat()
+        if key in buckets:
+            buckets[key]["missed"] = count
 
     points: list[TrendPoint] = []
     for key, bucket in buckets.items():
@@ -151,6 +160,7 @@ def inspection_trend(db: Session, days: int = 14) -> list[TrendPoint]:
                 date=key,
                 inspections=count,
                 issues=int(bucket["issues"]),
+                missed=int(bucket["missed"]),
                 avg_score=round(bucket["score_sum"] / count, 1) if count else 0.0,
             )
         )

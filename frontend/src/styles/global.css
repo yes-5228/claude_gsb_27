@@ -663,6 +663,10 @@ table.data-table td.wrap {
   background: var(--warning);
 }
 
+.trend-bar.missed {
+  background: var(--danger);
+}
+
 .trend-label {
   font-size: 10.5px;
   color: var(--text-muted);
@@ -689,6 +693,10 @@ table.data-table td.wrap {
 
 .legend .issues::before {
   background: var(--warning);
+}
+
+.legend .missed::before {
+  background: var(--danger);
 }
 
 /* 明细与时间线 */

@@ -5,10 +5,11 @@ from datetime import date, datetime, time
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.constants import OPEN_RESTROOM_STATUS
 from app.core.exceptions import DomainError, NotFoundError
 from app.models import Inspection, Restroom
 from app.schemas.inspection import InspectionCreate, InspectionOut, InspectionUpdate
-from app.services import restroom_service, scoring
+from app.services import restroom_service, scoring, status_service, task_service
 
 SORTABLE_FIELDS = {
     "inspect_time": Inspection.inspect_time,
@@ -100,15 +101,28 @@ def list_inspections(
     return rows, total
 
 
+def _ensure_open_at(db: Session, restroom_id: int, inspect_time: datetime) -> None:
+    """巡查时刻公厕必须处于开放状态，否则视为停用期间派单，拒绝生成。"""
+    restroom = restroom_service.get_restroom(db, restroom_id)
+    events = status_service.list_events(db, restroom.id)
+    status_then = status_service.status_at(inspect_time, events, restroom.status)
+    if status_then != OPEN_RESTROOM_STATUS:
+        raise DomainError(
+            f"公厕在 {inspect_time:%Y-%m-%d %H:%M} 处于「{status_then}」状态，"
+            "停用期间不生成巡查任务，请在恢复开放后再录入"
+        )
+
+
 def create_inspection(db: Session, payload: InspectionCreate) -> Inspection:
-    restroom_service.get_restroom(db, payload.restroom_id)
+    inspect_time = payload.inspect_time or datetime.now()
+    _ensure_open_at(db, payload.restroom_id, inspect_time)
     items = _normalize_items(payload.items)
     score, grade, result = scoring.evaluate(items)
     inspection = Inspection(
         restroom_id=payload.restroom_id,
         inspector=payload.inspector,
         shift=payload.shift.value if hasattr(payload.shift, "value") else payload.shift,
-        inspect_time=payload.inspect_time or datetime.now(),
+        inspect_time=inspect_time,
         items=items,
         score=score,
         grade=grade,
@@ -118,6 +132,9 @@ def create_inspection(db: Session, payload: InspectionCreate) -> Inspection:
     db.add(inspection)
     db.commit()
     db.refresh(inspection)
+    task_service.complete_task_for_inspection(
+        db, inspection.restroom_id, inspect_time.date(), inspection.id
+    )
     restroom_service.touch(db, payload.restroom_id)
     return inspection
 
@@ -137,6 +154,7 @@ def update_inspection(db: Session, inspection_id: int, payload: InspectionUpdate
     if data.get("shift") is not None and payload.shift is not None:
         inspection.shift = payload.shift.value if hasattr(payload.shift, "value") else payload.shift
     if data.get("inspect_time") is not None and payload.inspect_time is not None:
+        _ensure_open_at(db, inspection.restroom_id, payload.inspect_time)
         inspection.inspect_time = payload.inspect_time
     if "remark" in data:
         inspection.remark = payload.remark

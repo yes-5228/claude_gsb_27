@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import (
     INSPECTION_CHECK_ITEMS,
+    SUSPENDED_RESTROOM_STATUSES,
     IssueCategory,
     IssueSeverity,
     IssueStatus,
@@ -19,7 +20,14 @@ from app.models import Restroom
 from app.schemas.inspection import InspectionCreate, InspectionItem
 from app.schemas.issue import IssueCreate, IssueStatusUpdate
 from app.schemas.restroom import RestroomCreate
-from app.services import inspection_service, issue_service, restroom_service
+from app.schemas.rule import DeadlineRuleCreate
+from app.services import (
+    assessment_service,
+    inspection_service,
+    issue_service,
+    restroom_service,
+    rule_service,
+)
 
 RANDOM_SEED = 20240913
 
@@ -105,9 +113,12 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
 
     rng = random.Random(RANDOM_SEED)
     now = datetime.now()
+    # 演示数据假设公厕在巡查历史开始前已建档，应巡/漏检统计才有意义
+    created_at = now - timedelta(days=13)
 
-    restrooms = [
-        restroom_service.create_restroom(
+    restrooms = []
+    for name, district, address, grade, status, manager, stalls, basins, accessible in RESTROOM_SPECS:
+        restroom = restroom_service.create_restroom(
             db,
             RestroomCreate(
                 name=name,
@@ -123,8 +134,9 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
                 open_hours="06:00-22:30" if grade == RestroomGrade.FIRST else "06:30-21:30",
             ),
         )
-        for name, district, address, grade, status, manager, stalls, basins, accessible in RESTROOM_SPECS
-    ]
+        restroom.created_at = created_at
+        restrooms.append(restroom)
+    db.commit()
 
     quality_by_restroom = {room.id: rng.uniform(7.4, 9.8) for room in restrooms}
     inspection_ids: list[tuple[int, int]] = []  # (restroom_id, inspection_id)
@@ -132,7 +144,7 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
     for offset in range(13, -1, -1):
         day = now - timedelta(days=offset)
         for room in restrooms:
-            if room.status == RestroomStatus.CLOSED:
+            if room.status != RestroomStatus.NORMAL:
                 continue
             if rng.random() < 0.3:
                 continue
@@ -189,6 +201,24 @@ def seed_database(db: Session, *, reset: bool = False) -> int:
         )
         created += 1
         _advance_issue(db, issue.id, age_days, rng)
+
+    # 预置一条默认顺延规则：停用期间未闭环问题期限自动顺延 3 天
+    rule_service.create_rule(
+        db,
+        DeadlineRuleCreate(
+            name="停用顺延规则（默认）",
+            extend_days=3,
+            trigger_statuses=list(SUSPENDED_RESTROOM_STATUSES),
+            effective_from=now - timedelta(days=30),
+            enabled=True,
+            remark="公厕转入维修中/暂停使用时，未闭环问题的整改期限每次顺延 3 天",
+        ),
+    )
+
+    # 预生成上月月度考核快照，演示「已发布的考核不随后续状态变化改变」
+    first_of_month = now.replace(day=1)
+    last_month = (first_of_month - timedelta(days=1)).strftime("%Y-%m")
+    assessment_service.generate(db, last_month, operator="系统")
 
     return created
 

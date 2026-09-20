@@ -55,7 +55,7 @@ export default function DashboardPage() {
                 label="在册公厕"
                 value={overview.restroom_total}
                 unit="座"
-                foot={`正常开放 ${overview.restroom_open} 座 · 维修 ${overview.restroom_maintenance} 座`}
+                foot={`开放 ${overview.restroom_open} · 维修 ${overview.restroom_maintenance} · 暂停 ${overview.restroom_closed} 座`}
               />
               <StatCard
                 label="巡查记录总数"
@@ -63,6 +63,13 @@ export default function DashboardPage() {
                 unit="条"
                 tone="info"
                 foot={`今日 ${overview.inspection_today} 条 · 近 7 日 ${overview.inspection_week} 条`}
+              />
+              <StatCard
+                label="近 7 日漏检"
+                value={overview.inspection_missed_week}
+                unit="次"
+                tone={overview.inspection_missed_week > 0 ? 'danger' : 'primary'}
+                foot="停用期间的空白不计漏检"
               />
               <StatCard
                 label="近 7 日均分"
